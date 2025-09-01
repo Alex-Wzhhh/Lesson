@@ -1,0 +1,4 @@
+#ifndef WSIHANDLER_CPP
+#define WSIHANDLER_CPP
+
+#endif // WSIHANDLER_CPP
