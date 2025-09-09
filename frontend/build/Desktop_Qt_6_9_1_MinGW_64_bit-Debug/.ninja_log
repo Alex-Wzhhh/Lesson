@@ -1,0 +1,15 @@
+# ninja log v6
+4	2928	7790946732354379	QtPythonHybrid_autogen/timestamp	351725acaa659d2c
+4	2928	7790946732354379	QtPythonHybrid_autogen/mocs_compilation.cpp	351725acaa659d2c
+4	2928	7790946732354379	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug/QtPythonHybrid_autogen/timestamp	351725acaa659d2c
+2932	5940	7790946736315158	CMakeFiles/QtPythonHybrid.dir/QtPythonHybrid_autogen/mocs_compilation.cpp.obj	5190bd09231a335d
+4	2928	7790946732354379	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug/QtPythonHybrid_autogen/mocs_compilation.cpp	351725acaa659d2c
+3134	5909	7790946738331992	CMakeFiles/QtPythonHybrid.dir/main.cpp.obj	2724a4cc46828afd
+35	1245	7790956838427659	QtPythonHybrid_autogen/timestamp	351725acaa659d2c
+35	1245	7790956838427659	QtPythonHybrid_autogen/mocs_compilation.cpp	351725acaa659d2c
+35	1245	7790956838427659	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug/QtPythonHybrid_autogen/timestamp	351725acaa659d2c
+35	1245	7790956838427659	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug/QtPythonHybrid_autogen/mocs_compilation.cpp	351725acaa659d2c
+34	904	7790958207028896	QtPythonHybrid_autogen/timestamp	351725acaa659d2c
+34	904	7790958207028896	QtPythonHybrid_autogen/mocs_compilation.cpp	351725acaa659d2c
+34	904	7790958207028896	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug/QtPythonHybrid_autogen/timestamp	351725acaa659d2c
+34	904	7790958207028896	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug/QtPythonHybrid_autogen/mocs_compilation.cpp	351725acaa659d2c
