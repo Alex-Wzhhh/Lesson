@@ -1,5 +1,5 @@
 #include "mainwindow.h"
-#include"ui_mainwindow.h"
+#include "ui_mainwindow.h"
 #include <QNetworkRequest>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -14,32 +14,29 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     connect(nam_, &QNetworkAccessManager::finished, this, &MainWindow::onReplyFinished);
+    connect(ui->wsiLabel, &ImageLabel::regionSelected, this, &MainWindow::onRegionSelected);
 }
 
 MainWindow::~MainWindow() {
     delete ui;
 }
 
-void MainWindow::on_btnProcess_clicked() {
-    // 选择一张本地图片（先用 by-path 接口）
-    QString imgPath = QFileDialog::getOpenFileName(this, "选择图像", "", "Images (*.png *.jpg *.jpeg *.bmp)");
-    if (imgPath.isEmpty()) return;
+void MainWindow::on_btnLoadWSI_clicked() {
+    QString path = QFileDialog::getOpenFileName(this, "选择WSI", "", "WSI (*.svs *.tif *.tiff)");
+    if (path.isEmpty()) return;
 
-    // 组织 JSON
+    currentWSIPath_ = path.replace("/", "\\");
     QJsonObject obj;
-    obj["image_path"] = imgPath.replace("/", "\\"); // Windows 路径
-    QJsonDocument doc(obj);
-
-    // 发送请求
-    QNetworkRequest req(QUrl("http://127.0.0.1:5001/process/by-path"));
+    obj["image_path"] = currentWSIPath_;
+    QNetworkRequest req(QUrl("http://127.0.0.1:5001/wsi/info"));
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    nam_->post(req, doc.toJson());
-    ui->resultTextEdit->appendPlainText("请求已发送...");
+    nam_->post(req, QJsonDocument(obj).toJson());
+    ui->resultTextEdit->appendPlainText("请求WSI信息...");
 }
 
 void MainWindow::onReplyFinished(QNetworkReply* reply) {
     if (reply->error() != QNetworkReply::NoError) {
-        ui->resultTextEdit->appendPlainText("请求失败: " + reply->errorString());
+        ui->resultTextEdit->append("请求失败: " + reply->errorString());
         reply->deleteLater();
         return;
     }
@@ -49,27 +46,50 @@ void MainWindow::onReplyFinished(QNetworkReply* reply) {
     QJsonParseError err{};
     QJsonDocument jd = QJsonDocument::fromJson(data, &err);
     if (err.error != QJsonParseError::NoError || !jd.isObject()) {
-        ui->resultTextEdit->appendPlainText("解析 JSON 失败");
+        ui->resultTextEdit->append("解析 JSON 失败");
         return;
     }
     QJsonObject obj = jd.object();
     bool ok = obj.value("ok").toBool(false);
     if (!ok) {
-        ui->resultTextEdit->appendPlainText("后端返回错误: " + obj.value("error").toString());
+        ui->resultTextEdit->append("后端返回错误: " + obj.value("error").toString());
         return;
     }
 
-    lastOutputPath_ = obj.value("output_path").toString();
-    int edgeCount = obj.value("metrics").toObject().value("edge_count").toInt();
-
-    ui->resultTextEdit->appendPlainText("处理完成，edge_count=" + QString::number(edgeCount));
-    // 显示输出图像
-    if (!lastOutputPath_.isEmpty()) {
-        QPixmap px(lastOutputPath_);
+    QString path = reply->url().path();
+    if (path.endsWith("/wsi/info")) {
+        int width = obj.value("width").toInt();
+        int height = obj.value("height").toInt();
+        QString thumbPath = obj.value("thumbnail_path").toString();
+        QPixmap px(thumbPath);
         if (!px.isNull()) {
-            ui->imageLabel->setPixmap(px);
-        } else {
-            ui->resultTextEdit->appendPlainText("加载输出图像失败: " + lastOutputPath_);
+            ui->wsiLabel->setPixmap(px);
+            scaleX_ = double(width) / px.width();
+            scaleY_ = double(height) / px.height();
+        }
+        ui->resultTextEdit->appendPlainText(QString("WSI 大小: %1 x %2, 层级: %3")
+                                                .arg(width).arg(height)
+                                                .arg(obj.value("level_count").toInt()));
+    } else if (path.endsWith("/wsi/region")) {
+        QString regionPath = obj.value("region_path").toString();
+        if (!regionPath.isEmpty()) {
+            QPixmap px(regionPath);
+            ui->roiLabel->setPixmap(px);
         }
     }
+}
+
+void MainWindow::onRegionSelected(const QRect &rect) {
+    if (currentWSIPath_.isEmpty()) return;
+    QJsonObject obj;
+    obj["image_path"] = currentWSIPath_;
+    obj["level"] = 0;
+    obj["x"] = int(rect.x() * scaleX_);
+    obj["y"] = int(rect.y() * scaleY_);
+    obj["w"] = int(rect.width() * scaleX_);
+    obj["h"] = int(rect.height() * scaleY_);
+    QNetworkRequest req(QUrl("http://127.0.0.1:5001/wsi/region"));
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    nam_->post(req, QJsonDocument(obj).toJson());
+    ui->resultTextEdit->appendPlainText("请求ROI区域...");
 }

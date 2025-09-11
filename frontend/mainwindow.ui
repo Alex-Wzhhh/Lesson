@@ -16,9 +16,9 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="QPushButton" name="btnProcess">
+     <widget class="QPushButton" name="btnLoadWSI">
       <property name="text">
-       <string>选择图像处理</string>
+       <string>加载WSI</string>
       </property>
      </widget>
     </item>
@@ -26,9 +26,19 @@
      <widget class="QPlainTextEdit" name="resultTextEdit"/>
     </item>
     <item>
-     <widget class="QLabel" name="imageLabel">
+     <widget class="ImageLabel" name="wsiLabel">
       <property name="text">
-       <string>结果图像</string>
+       <string>WSI缩略图</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="roiLabel">
+      <property name="text">
+       <string>ROI</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
@@ -48,7 +58,14 @@
    </property>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
- </widget>
+</widget>
+ <customwidgets>
+  <customwidget>
+   <class>ImageLabel</class>
+   <extends>QLabel</extends>
+   <header>imagelabel.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

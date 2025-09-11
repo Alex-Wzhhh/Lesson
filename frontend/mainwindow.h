@@ -5,6 +5,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QString>
+#include "imagelabel.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -17,13 +18,15 @@ public:
     ~MainWindow();
 
 private slots:
-    void on_btnProcess_clicked();
-    void onReplyFinished(QNetworkReply* reply);
+    void on_btnLoadWSI_clicked();
+    void onRegionSelected(const QRect &rect);
 
 private:
     Ui::MainWindow *ui;
     QNetworkAccessManager *nam_;
-    QString lastOutputPath_;
+    QString currentWSIPath_;
+    double scaleX_ = 1.0;
+    double scaleY_ = 1.0;
 };
 
 #endif // MAINWINDOW_H

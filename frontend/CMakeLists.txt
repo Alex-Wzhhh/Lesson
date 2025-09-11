@@ -5,8 +5,9 @@ project(Lesson LANGUAGES CXX)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+set(CMAKE_PREFIX_PATH "D:/University/Qt/6.9.1/mingw_64")
 
-find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets Network)
+find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets Network Qt6Core)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -16,12 +17,13 @@ set(PROJECT_SOURCES
     main.cpp
     mainwindow.cpp
     mainwindow.h
+    imagelabel.cpp
+    imagelabel.h
     mainwindow.ui
 )
 
 add_executable(QtPythonHybrid
     ${PROJECT_SOURCES}
-    ui_mainwindow.h
 )
 
 target_link_libraries(QtPythonHybrid PRIVATE Qt6::Widgets Qt6::Network)

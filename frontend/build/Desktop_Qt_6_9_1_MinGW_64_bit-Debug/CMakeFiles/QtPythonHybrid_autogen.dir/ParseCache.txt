@@ -410,6 +410,6 @@ D:/University/Qt/Qt-Project/Lesson/frontend/mainwindow.h
  mdp:D:/University/Qt/Qtsoftware/Tools/mingw1310_64/x86_64-w64-mingw32/include/time.h
  mdp:D:/University/Qt/Qtsoftware/Tools/mingw1310_64/x86_64-w64-mingw32/include/vadefs.h
  mdp:D:/University/Qt/Qtsoftware/Tools/mingw1310_64/x86_64-w64-mingw32/include/wchar.h
-D:/University/Qt/Qt-Project/Lesson/frontend/main.cpp
 D:/University/Qt/Qt-Project/Lesson/frontend/ui_mainwindow.h
+D:/University/Qt/Qt-Project/Lesson/frontend/main.cpp
 D:/University/Qt/Qt-Project/Lesson/frontend/mainwindow.cpp

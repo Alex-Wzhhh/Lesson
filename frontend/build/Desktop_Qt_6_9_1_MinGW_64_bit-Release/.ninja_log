@@ -1,0 +1,9 @@
+# ninja log v6
+52	2899	7791062976143276	QtPythonHybrid_autogen/timestamp	b6f824c8417a65ad
+52	2899	7791062976143276	QtPythonHybrid_autogen/mocs_compilation.cpp	b6f824c8417a65ad
+4351	28367	7791037352895763	CMakeFiles/QtPythonHybrid.dir/mainwindow.cpp.obj	37b61fef322c58df
+52	2899	7791062976143276	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Release/QtPythonHybrid_autogen/timestamp	b6f824c8417a65ad
+3744	28211	7791037346822646	CMakeFiles/QtPythonHybrid.dir/QtPythonHybrid_autogen/mocs_compilation.cpp.obj	c463338e45b6c383
+52	2899	7791062976143276	D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Release/QtPythonHybrid_autogen/mocs_compilation.cpp	b6f824c8417a65ad
+4004	29555	7791037349427089	CMakeFiles/QtPythonHybrid.dir/main.cpp.obj	4d6ff7fb64edf3af
+29556	31512	7791037604904878	QtPythonHybrid.exe	dc8262451caa1c12
