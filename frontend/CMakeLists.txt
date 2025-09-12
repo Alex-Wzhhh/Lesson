@@ -19,11 +19,13 @@ set(PROJECT_SOURCES
     mainwindow.h
     imagelabel.cpp
     imagelabel.h
+    wsiviewer.cpp
+    wsiviewer.h
     mainwindow.ui
 )
 
 add_executable(QtPythonHybrid
     ${PROJECT_SOURCES}
 )
-
-target_link_libraries(QtPythonHybrid PRIVATE Qt6::Widgets Qt6::Network)
+target_link
+_libraries(QtPythonHybrid PRIVATE Qt6::Widgets Qt6::Network)

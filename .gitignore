@@ -1,0 +1,26 @@
+# 忽略虚拟环境
+backend/env/
+
+# 忽略 Python 临时文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# 忽略 IDE/Qt Creator/VSCode 临时文件
+*.user
+*.pro.user
+*.qmake.stash
+.vscode/
+
+# 忽略 CMake/Qt build 目录
+frontend/build/
+CMakeFiles/
+CMakeCache.txt
+*.ninja
+*.obj
+*.o
+*.dll
+*.exe
+*.pdb

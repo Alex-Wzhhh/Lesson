@@ -1,5 +1,0 @@
-D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Release/CMakeFiles/QtPythonHybrid.dir
-D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Release/CMakeFiles/edit_cache.dir
-D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Release/CMakeFiles/rebuild_cache.dir
-D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Release/CMakeFiles/QtPythonHybrid_autogen_timestamp_deps.dir
-D:/University/Qt/Qt-Project/Lesson/frontend/build/Desktop_Qt_6_9_1_MinGW_64_bit-Release/CMakeFiles/QtPythonHybrid_autogen.dir

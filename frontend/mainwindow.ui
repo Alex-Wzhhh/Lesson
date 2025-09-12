@@ -26,12 +26,15 @@
      <widget class="QPlainTextEdit" name="resultTextEdit"/>
     </item>
     <item>
-     <widget class="ImageLabel" name="wsiLabel">
-      <property name="text">
-       <string>WSI缩略图</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
+      <widget class="WSIViewer" name="wsiView"/>
+    </item>
+    <item>
+     <widget class="QComboBox" name="comboLevel"/>
+    </item>
+    <item>
+     <widget class="QSlider" name="sliderLevel">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </item>
@@ -61,9 +64,9 @@
 </widget>
  <customwidgets>
   <customwidget>
-   <class>ImageLabel</class>
-   <extends>QLabel</extends>
-   <header>imagelabel.h</header>
+   <class>WSIViewer</class>
+   <extends>QGraphicsView</extends>
+   <header>wsiviewer.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
