@@ -1,21 +1,28 @@
 #pragma once
 #include <QString>
 #include <QImage>
+#include <QUrl>
+#include <QVector>
+#include <QSize>
 
 class WSIHandler {
 public:
-    WSIHandler();
+    explicit WSIHandler(const QUrl& backendBase = QUrl("http://127.0.0.1:5001"));
     ~WSIHandler();
+
     bool open(const QString& path);
     bool isOpen() const;
-    // 根据当前缩放读取一块区域（简化：演示中忽略真实多级金字塔映射）
+
     QImage readRegionAtCurrentScale(qint64 x, qint64 y, int w, int h);
 
+    int levelCount() const { return m_levelCount; }
+    QSize levelSize(int level) const;
+
 private:
-#ifdef USE_OPENSLIDE
-    struct Impl;
-    Impl* d;
-#elif defined(DUMMY_WSI)
-    QImage m_fullImage; // 用普通大图代替
-#endif
+    QUrl m_base;
+    int m_slideId{-1};
+    int m_levelCount{0};
+    QVector<QSize> m_levelDims;
+
+    QImage requestRegion(int level, qint64 x, qint64 y, int w, int h);
 };

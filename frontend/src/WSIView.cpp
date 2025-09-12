@@ -45,11 +45,15 @@ void WSIView::updateOverlay(){
 
 QImage WSIView::grabViewportImage() const{
     if(!m_pix) return QImage();
-    QRectF viewRect = mapToScene(viewport()->rect()).boundingRect();
+    const QRectF viewRect = mapToScene(viewport()->rect()).boundingRect();
     QImage img(viewRect.size().toSize(), QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::white);
     QPainter p(&img);
-    this->render(&p, QRect(QPoint(0,0), img.size()), viewRect.toRect());
+    const_cast<WSIView*>(this)->render(
+        &p,
+        QRectF(QPointF(0,0), QSizeF(img.size())),
+        viewRect.toRect()
+    );
     return img;
 }
 
@@ -71,7 +75,7 @@ void WSIView::mousePressEvent(QMouseEvent* e){
 
 void WSIView::mouseMoveEvent(QMouseEvent* e){
     if(m_panning){
-        QPoint delta = e->pos() - m_lastPos;
+        const QPoint delta = e->pos() - m_lastPos;
         m_lastPos = e->pos();
         horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
         verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());

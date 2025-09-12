@@ -3,12 +3,10 @@
 #include <QGraphicsPixmapItem>
 #include <QGraphicsRectItem>
 #include <QVector>
+#include <QList>
+#include "DetectionResult.h"   // 唯一的 DetBox 定义
 
-struct DetBox {
-    QRectF rect;
-    QString label;
-    double score;
-};
+class QGraphicsScene;
 
 class WSIView : public QGraphicsView {
     Q_OBJECT
@@ -32,7 +30,7 @@ protected:
 private:
     void updateOverlay();
 
-    QGraphicsScene* m_scene;
+    QGraphicsScene* m_scene{nullptr};
     QGraphicsPixmapItem* m_pix{nullptr};
     QList<QGraphicsRectItem*> m_rects;
     QPoint m_lastPos;

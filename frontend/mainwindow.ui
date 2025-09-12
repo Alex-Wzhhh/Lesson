@@ -6,61 +6,43 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1200</width>
+    <height>800</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Image Processor</string>
+   <string>肿瘤细胞识别原型系统</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     <widget class="QPushButton" name="btnLoadWSI">
-      <property name="text">
-       <string>加载WSI</string>
-      </property>
-     </widget>
-    </item>
-     <item>
-     <layout class="QHBoxLayout" name="levelLayout">
-      <item>
-       <widget class="QLabel" name="levelLabel">
-        <property name="text">
-         <string>层级</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QSpinBox" name="levelSpinBox">
-        <property name="maximum">
-         <number>0</number>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item>
-      <widget class="WSIViewer" name="wsiView"/>
-    </item>
-    <item>
-     <widget class="QComboBox" name="comboLevel"/>
-    </item>
-    <item>
-     <widget class="QSlider" name="sliderLevel">
+     <widget class="QSplitter" name="splitter">
       <property name="orientation">
-       <enum>Qt::Horizontal</enum>
+       <enum>Qt::Orientation::Horizontal</enum>
       </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QLabel" name="roiLabel">
-      <property name="text">
-       <string>ROI</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignCenter</set>
-      </property>
+      <widget class="WSIViewer" name="graphicsView"/>
+      <widget class="QTabWidget" name="tabWidget">
+       <widget class="QWidget" name="tabResults">
+        <attribute name="title">
+         <string>识别结果</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_results">
+         <item>
+          <widget class="QTextEdit" name="resultTextEdit"/>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tabStats">
+        <attribute name="title">
+         <string>统计信息</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout_stats">
+         <item>
+          <widget class="QTableWidget" name="statsTableWidget"/>
+         </item>
+        </layout>
+       </widget>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -70,13 +52,91 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>1200</width>
      <height>22</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>文件(&amp;F)</string>
+    </property>
+    <addaction name="actionOpenWSI"/>
+    <addaction name="actionSaveResults"/>
+    <addaction name="actionExit"/>
+   </widget>
+   <widget class="QMenu" name="menuModel">
+    <property name="title">
+     <string>模型(&amp;M)</string>
+    </property>
+    <addaction name="actionLoadModel"/>
+    <addaction name="actionSetThreshold"/>
+   </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>视图(&amp;V)</string>
+    </property>
+    <addaction name="actionZoomIn"/>
+    <addaction name="actionZoomOut"/>
+    <addaction name="actionResetView"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>帮助(&amp;H)</string>
+    </property>
+    <addaction name="actionAbout"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuModel"/>
+   <addaction name="menuView"/>
+   <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-</widget>
+  <action name="actionOpenWSI">
+   <property name="text">
+    <string>打开 WSI</string>
+   </property>
+  </action>
+  <action name="actionSaveResults">
+   <property name="text">
+    <string>保存结果</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>退出</string>
+   </property>
+  </action>
+  <action name="actionLoadModel">
+   <property name="text">
+    <string>加载模型</string>
+   </property>
+  </action>
+  <action name="actionSetThreshold">
+   <property name="text">
+    <string>设置阈值</string>
+   </property>
+  </action>
+  <action name="actionZoomIn">
+   <property name="text">
+    <string>放大</string>
+   </property>
+  </action>
+  <action name="actionZoomOut">
+   <property name="text">
+    <string>缩小</string>
+   </property>
+  </action>
+  <action name="actionResetView">
+   <property name="text">
+    <string>重置视图</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>关于</string>
+   </property>
+  </action>
+ </widget>
  <customwidgets>
   <customwidget>
    <class>WSIViewer</class>

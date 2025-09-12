@@ -1,6 +1,8 @@
 #pragma once
 #include <QMainWindow>
 #include <QPointer>
+#include <memory>
+
 #include "WSIHandler.h"
 #include "WSIView.h"
 #include "InferenceClient.h"
@@ -24,9 +26,10 @@ private slots:
     void updateStatus();
 
 private:
-    Ui::MainWindow* ui;
+    Ui::MainWindow* ui{nullptr};
     std::unique_ptr<WSIHandler> m_handler;
     std::unique_ptr<InferenceClient> m_infer;
     QPointer<WSIView> m_view;
     DetectionResult m_result;
 };
+
