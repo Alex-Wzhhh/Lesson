@@ -5,7 +5,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QString>
-#include "imagelabel.h"
+#include <QTreeWidgetItem>
+#include <QVector>
+#include "wsiviewer.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -19,14 +21,22 @@ public:
 
 private slots:
     void on_btnLoadWSI_clicked();
-    void onRegionSelected(const QRect &rect);
+    void onReplyFinished(QNetworkReply *reply);
+    void onLevelChanged(int level);
+    void requestRegion();
+    void onLevelChanged(int level);
+    void onTreeItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 
 private:
     Ui::MainWindow *ui;
     QNetworkAccessManager *nam_;
     QString currentWSIPath_;
-    double scaleX_ = 1.0;
-    double scaleY_ = 1.0;
+    int wsiWidth_ = 0;
+    int wsiHeight_ = 0;
+    int currentLevel_ = 0;
+    int lastX_ = 0;
+    int lastY_ = 0;
+    QVector<double> levelDownsamples_;
 };
 
 #endif // MAINWINDOW_H
