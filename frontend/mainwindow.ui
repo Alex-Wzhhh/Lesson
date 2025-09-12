@@ -22,8 +22,23 @@
       </property>
      </widget>
     </item>
-    <item>
-     <widget class="QPlainTextEdit" name="resultTextEdit"/>
+     <item>
+     <layout class="QHBoxLayout" name="levelLayout">
+      <item>
+       <widget class="QLabel" name="levelLabel">
+        <property name="text">
+         <string>层级</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSpinBox" name="levelSpinBox">
+        <property name="maximum">
+         <number>0</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
     <item>
       <widget class="WSIViewer" name="wsiView"/>
