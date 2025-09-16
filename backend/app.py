@@ -10,14 +10,16 @@ from typing import List, Dict, Tuple
 from inference.opencv_model import detect_bboxes, DetectConfig
 from schemas import AnalyzeViewportReq, AnalyzeViewportResp, Box
 
-# === 新增：OpenSlide-only-in-Python ===
+# 因为要处理WSI图像，所以只用Opensilde，不用其他，此处做检查
 try:
     import openslide
 except Exception as e:
     openslide = None
 
+#创建一个Fast API对象（路由），接受并发送请求
 app = FastAPI(title="Qt-Python Backend for WSI Tumor Recognition")
 
+#网络测试函数
 @app.get("/ping")
 def ping():
     return {"status": "ok"}
@@ -30,10 +32,34 @@ def analyze_viewport(req: AnalyzeViewportReq):
     rgb = np.array(pil_img)
     bgr = rgb[:, :, ::-1]
     boxes = detect_bboxes(bgr, DetectConfig())
-    out_boxes: List[Box] = [
-        Box(x=float(x), y=float(y), w=float(w), h=float(h), label="tumor", score=float(score))
-        for (x, y, w, h, score) in boxes
-    ]
+    level = int(req.level) if req.level is not None else 0
+    origin_x = float(req.origin_x or 0.0)
+    origin_y = float(req.origin_y or 0.0)
+    downsample = 1.0
+
+    if req.slide_id is not None:
+        with _LOCK:
+            meta = _META.get(req.slide_id)
+        if meta is None:
+            raise HTTPException(status_code=404, detail="slide 未打开或已关闭，请先调用 /open_wsi")
+        downsamples = meta.get("level_downsamples") or []
+        if not (0 <= level < len(downsamples)):
+            raise HTTPException(status_code=400, detail="level 超出范围，无法换算到 level0")
+        downsample = float(downsamples[level])
+
+    def _to_level0(x: float, y: float, w: float, h: float) -> Tuple[float, float, float, float]:
+        lx = (origin_x + x) * downsample
+        ly = (origin_y + y) * downsample
+        lw = w * downsample
+        lh = h * downsample
+        return lx, ly, lw, lh
+
+    out_boxes: List[Box] = []
+    for (x, y, w, h, score) in boxes:
+        lx, ly, lw, lh = _to_level0(float(x), float(y), float(w), float(h))
+        out_boxes.append(
+            Box(x=lx, y=ly, w=lw, h=lh, label="tumor", score=float(score))
+        )
     h, w = rgb.shape[:2]
     return AnalyzeViewportResp(image_size=(int(w), int(h)), boxes=out_boxes)
 

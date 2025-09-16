@@ -16,9 +16,14 @@ public:
     bool isEmpty() const;
     void setDetections(const QVector<DetBox>& boxes);
     QImage grabViewportImage() const;
+    void setLevelCount(int count);
+    int levelCount() const { return m_levelCount; }
+    int currentLevel() const { return m_currentLevel; }
+    void setCurrentLevel(int level);
 
 signals:
     void viewportChanged();
+    void levelChanged(int level);
 
 protected:
     void wheelEvent(QWheelEvent* e) override;
@@ -36,4 +41,6 @@ private:
     QPoint m_lastPos;
     bool m_panning{false};
     QVector<DetBox> m_boxes;
+    int m_levelCount{0};
+    int m_currentLevel{0};
 };
