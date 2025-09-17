@@ -15,7 +15,11 @@
 #include <QMenuBar>
 #include <QAction>
 #include <QRect>
+#include <QPainter>
+#include <QPixmap>
+#include <QRadialGradient>
 #include <cmath>
+#include <algorithm>
 
 #include "WSIHandler.h"
 #include "WSIView.h"
@@ -53,12 +57,26 @@ MainWindow::MainWindow(QWidget* parent)
     // 后端 URL
     const QUrl backendBase = loadBackendUrl();
 
+    if (ui->resultTextEdit) {
+        ui->resultTextEdit->setReadOnly(true);
+    }
+    if (ui->mainSplitter) {
+        ui->mainSplitter->setStretchFactor(0, 1);
+        ui->mainSplitter->setStretchFactor(1, 3);
+        ui->mainSplitter->setCollapsible(0, false);
+        ui->mainSplitter->setCollapsible(1, false);
+    }
+    if (ui->heatmapLabel) {
+        ui->heatmapLabel->setText(QStringLiteral("暂无热力图数据"));
+        ui->heatmapLabel->setAlignment(Qt::AlignCenter);
+    }
+
     // 中心视图使用 UI 中的占位控件
-    m_view = ui->graphicsView;
+    m_view = ui->wsiView;
     if (!m_view) {
         m_view = new WSIView(this);
-        if (ui->splitter) {
-            ui->splitter->insertWidget(0, m_view);
+        if (ui->mainSplitter) {
+            ui->mainSplitter->addWidget(m_view);
         } else {
             setCentralWidget(m_view);
         }
@@ -112,6 +130,9 @@ MainWindow::MainWindow(QWidget* parent)
 
 
     statusBar()->showMessage(QStringLiteral("准备就绪（后端：%1）").arg(backendBase.toString()));
+
+    updateDetectionDetails();
+    updateHeatmapVisualization();
 }
 
 MainWindow::~MainWindow(){ delete ui; }
@@ -137,6 +158,8 @@ void MainWindow::openWSI() {
     m_result.clear();
     m_view->setSlideInfo(downsamples, levelSizes);
     m_view->setDetections(m_result.boxes());
+    updateDetectionDetails();
+    updateHeatmapVisualization();
     m_currentLevel = m_view->currentLevel();
     if (m_handler) {
         m_handler->setCurrentLevel(m_currentLevel);
@@ -178,6 +201,8 @@ void MainWindow::runInferenceOnViewport() {
 
     m_result.setBoxes(boxes);
     m_view->setDetections(m_result.boxes());
+    updateDetectionDetails();
+    updateHeatmapVisualization();
     updateStatus();
 }
 
@@ -199,7 +224,105 @@ void MainWindow::loadResults() {
         return;
     }
     m_view->setDetections(m_result.boxes());
+    updateDetectionDetails();
+    updateHeatmapVisualization();
     updateStatus();
+}
+
+void MainWindow::updateDetectionDetails() {
+    if (!ui || !ui->resultTextEdit) return;
+
+    if (m_result.count() == 0) {
+        ui->resultTextEdit->setPlainText(QStringLiteral("暂无识别结果。\n请运行识别以查看检测详情。"));
+        return;
+    }
+
+    QStringList lines;
+    lines.reserve(m_result.count());
+    int index = 1;
+    for (const auto& box : m_result.boxes()) {
+        const QString label = box.label.isEmpty() ? QStringLiteral("未标注") : box.label;
+        lines << QStringLiteral("#%1 %2 置信度: %3\n区域: [x=%4, y=%5, w=%6, h=%7]")
+                     .arg(index++)
+                     .arg(label)
+                     .arg(box.score, 0, 'f', 2)
+                     .arg(box.rect.x(), 0, 'f', 0)
+                     .arg(box.rect.y(), 0, 'f', 0)
+                     .arg(box.rect.width(), 0, 'f', 0)
+                     .arg(box.rect.height(), 0, 'f', 0);
+    }
+
+    ui->resultTextEdit->setPlainText(lines.join(QStringLiteral("\n\n")));
+}
+
+void MainWindow::updateHeatmapVisualization() {
+    if (!ui || !ui->heatmapLabel) return;
+
+    if (m_result.count() == 0) {
+        ui->heatmapLabel->setPixmap(QPixmap());
+        ui->heatmapLabel->setText(QStringLiteral("暂无热力图数据"));
+        return;
+    }
+
+    QRectF bounds;
+    bool firstBox = true;
+    for (const auto& box : m_result.boxes()) {
+        if (firstBox) {
+            bounds = box.rect;
+            firstBox = false;
+        } else {
+            bounds = bounds.united(box.rect);
+        }
+    }
+
+    if (bounds.width() <= 0.0 || bounds.height() <= 0.0) {
+        bounds = QRectF(0.0, 0.0, 512.0, 512.0);
+    }
+
+    const double marginX = std::max(bounds.width() * 0.1, 50.0);
+    const double marginY = std::max(bounds.height() * 0.1, 50.0);
+    bounds.adjust(-marginX, -marginY, marginX, marginY);
+    if (bounds.width() <= 0.0) bounds.setWidth(1.0);
+    if (bounds.height() <= 0.0) bounds.setHeight(1.0);
+
+    constexpr int kTargetWidth = 420;
+    int heatHeight = static_cast<int>(std::round(bounds.height() / bounds.width() * kTargetWidth));
+    if (heatHeight <= 0) {
+        heatHeight = kTargetWidth;
+    }
+    heatHeight = std::clamp(heatHeight, 160, 720);
+
+    QImage heatmap(kTargetWidth, heatHeight, QImage::Format_ARGB32_Premultiplied);
+    heatmap.fill(QColor(30, 30, 30, 255));
+
+    QPainter painter(&heatmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    const double scaleX = static_cast<double>(kTargetWidth) / bounds.width();
+    const double scaleY = static_cast<double>(heatHeight) / bounds.height();
+
+    for (const auto& box : m_result.boxes()) {
+        const QPointF center = box.rect.center();
+        const QPointF mapped((center.x() - bounds.left()) * scaleX, (center.y() - bounds.top()) * scaleY);
+        const double radiusX = box.rect.width() * scaleX * 0.5;
+        const double radiusY = box.rect.height() * scaleY * 0.5;
+        double radiusPx = std::max(18.0, std::max(radiusX, radiusY));
+        radiusPx = std::min(radiusPx, std::max(kTargetWidth, heatHeight) * 0.75);
+        const double weight = std::clamp(box.score, 0.0, 1.0);
+        QRadialGradient gradient(mapped, radiusPx);
+        gradient.setColorAt(0.0, QColor(255, 255, 0, static_cast<int>(200 * weight + 55)));
+        gradient.setColorAt(0.45, QColor(255, 140, 0, static_cast<int>(170 * weight + 40)));
+        gradient.setColorAt(0.9, QColor(255, 0, 0, static_cast<int>(100 * weight + 25)));
+        gradient.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(gradient);
+        painter.drawEllipse(mapped, radiusPx, radiusPx);
+    }
+
+    painter.end();
+
+    ui->heatmapLabel->setText(QString());
+    ui->heatmapLabel->setPixmap(QPixmap::fromImage(heatmap));
 }
 
 void MainWindow::updateStatus() {

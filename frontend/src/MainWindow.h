@@ -27,6 +27,9 @@ private slots:
     void handleLevelChanged(int level);
 
 private:
+    void updateDetectionDetails();
+    void updateHeatmapVisualization();
+
     Ui::MainWindow* ui{nullptr};
     std::unique_ptr<WSIHandler> m_handler;
     std::unique_ptr<InferenceClient> m_infer;

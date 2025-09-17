@@ -16,32 +16,113 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     <widget class="QSplitter" name="splitter">
+     <widget class="QSplitter" name="mainSplitter">
       <property name="orientation">
        <enum>Qt::Orientation::Horizontal</enum>
       </property>
-      <widget class="WSIViewer" name="graphicsView"/>
-      <widget class="QTabWidget" name="tabWidget">
-       <widget class="QWidget" name="tabResults">
-        <attribute name="title">
-         <string>识别结果</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="verticalLayout_results">
-         <item>
-          <widget class="QTextEdit" name="resultTextEdit"/>
-         </item>
-        </layout>
-       </widget>
-       <widget class="QWidget" name="tabStats">
-        <attribute name="title">
-         <string>统计信息</string>
-        </attribute>
-        <layout class="QVBoxLayout" name="verticalLayout_stats">
-         <item>
-          <widget class="QTableWidget" name="statsTableWidget"/>
-         </item>
-        </layout>
-       </widget>
+      <property name="childrenCollapsible">
+       <bool>false</bool>
+      </property>
+      <widget class="QWidget" name="leftPanelWidget">
+       <layout class="QVBoxLayout" name="leftPanelLayout">
+        <property name="spacing">
+         <number>8</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QGroupBox" name="heatmapGroupBox">
+          <property name="maximumSize">
+           <size>
+            <width>10000000</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="title">
+           <string>热力图</string>
+          </property>
+          <layout class="QVBoxLayout" name="heatmapGroupLayout">
+           <item>
+            <widget class="QLabel" name="heatmapLabel">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="frameShape">
+              <enum>QFrame::Shape::StyledPanel</enum>
+             </property>
+             <property name="frameShadow">
+              <enum>QFrame::Shadow::Sunken</enum>
+             </property>
+             <property name="text">
+              <string>暂无热力图数据</string>
+             </property>
+             <property name="scaledContents">
+              <bool>true</bool>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignmentFlag::AlignCenter</set>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="resultsGroupBox">
+          <property name="maximumSize">
+           <size>
+            <width>10000000</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="title">
+           <string>识别结果</string>
+          </property>
+          <layout class="QVBoxLayout" name="resultsGroupLayout">
+           <item>
+            <widget class="QTextEdit" name="resultTextEdit">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="readOnly">
+              <bool>true</bool>
+             </property>
+             <property name="placeholderText">
+              <string>暂无识别结果</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="WSIViewer" name="wsiView" native="true">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
       </widget>
      </widget>
     </item>
@@ -140,7 +221,7 @@
  <customwidgets>
   <customwidget>
    <class>WSIViewer</class>
-   <extends>QGraphicsView</extends>
+   <extends>QWidget</extends>
    <header>wsiviewer.h</header>
   </customwidget>
  </customwidgets>

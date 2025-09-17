@@ -146,7 +146,7 @@ void WSIView::mousePressEvent(QMouseEvent* event) {
         return;
     }
 
-    if (event->button() == Qt::RightButton || event->button() == Qt::MiddleButton) {
+    if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton || event->button() == Qt::MiddleButton) {
         m_isPanning = true;
         m_lastMousePos = event->pos();
         setCursor(Qt::ClosedHandCursor);
@@ -170,7 +170,7 @@ void WSIView::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void WSIView::mouseReleaseEvent(QMouseEvent* event) {
-    if (m_isPanning && (event->button() == Qt::RightButton || event->button() == Qt::MiddleButton)) {
+     if (m_isPanning && (event->button() == Qt::LeftButton || event->button() == Qt::RightButton || event->button() == Qt::MiddleButton)) {
         m_isPanning = false;
         setCursor(Qt::ArrowCursor);
         event->accept();
