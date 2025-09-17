@@ -14,6 +14,7 @@
 #include <QUrl>
 #include <QMenuBar>
 #include <QAction>
+#include <QRect>
 
 #include "WSIHandler.h"
 #include "WSIView.h"
@@ -58,6 +59,7 @@ MainWindow::MainWindow(QWidget* parent)
     // 业务对象
     m_handler = std::make_unique<WSIHandler>(backendBase);
     m_infer   = std::make_unique<InferenceClient>(backendBase);
+    m_view->setHandler(m_handler.get());
 
     // 不再依赖 .ui 中的 QAction —— 这里统一创建菜单与动作
     {
@@ -97,6 +99,9 @@ MainWindow::MainWindow(QWidget* parent)
 
     // 视口变化时更新状态
     connect(m_view, &WSIView::viewportChanged, this, &MainWindow::updateStatus);
+    connect(m_view, &WSIView::levelChanged, this, &MainWindow::handleLevelChanged);
+    connect(m_view, &WSIView::levelChanged, this, &MainWindow::updateStatus);
+
 
     statusBar()->showMessage(QStringLiteral("准备就绪（后端：%1）").arg(backendBase.toString()));
 }
@@ -112,19 +117,25 @@ void MainWindow::openWSI() {
         QMessageBox::warning(this, QStringLiteral("打开失败"), QStringLiteral("无法打开文件：%1").arg(path));
         return;
     }
+    m_view->setLevelCount(m_handler->levelCount());
+    m_handler->setCurrentLevel(m_view->currentLevel());
 
     // 初次读取一块区域（可按需调整尺寸）
-    QImage img = m_handler->readRegionAtCurrentScale(0, 0, 2048, 2048);
-    if (img.isNull()) {
-        QMessageBox::warning(this, QStringLiteral("读取失败"), QStringLiteral("未能从后端读取图像区域"));
+    const auto downsamples = m_handler->levelDownsamples();
+    const auto levelSizes = m_handler->levelSizes();
+    if (levelSizes.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("打开失败"), QStringLiteral("未获取到切片层级信息"));
         return;
     }
 
     m_result.clear();
-    m_view->setImage(img);
+    m_view->setSlideInfo(downsamples, levelSizes);
     m_view->setDetections(m_result.boxes());
-    statusBar()->showMessage(QStringLiteral("已打开：%1  （%2×%3）")
-                             .arg(path).arg(img.width()).arg(img.height()));
+    const auto downsamples = m_handler->levelDownsamples();
+    const auto levelSizes = m_handler->levelSizes();
+    if (levelSizes.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("打开失败"), QStringLiteral("未获取到切片层级信息"));
+    }
 }
 
 void MainWindow::runInferenceOnViewport() {
@@ -138,9 +149,38 @@ void MainWindow::runInferenceOnViewport() {
         return;
     }
 
-    const QVector<DetBox> boxes = m_infer->analyzeViewport(viewport);
-    m_result.setBoxes(boxes);
-    m_view->setDetections(m_result.boxes());
+    const QRect sceneRect = m_view->lastGrabbedSceneRect();
+    if(sceneRect.isEmpty()){
+        QMessageBox::warning(this, QStringLiteral("抓取失败"), QStringLiteral("无法确定视口区域"));
+        return;
+    }
+
+    ViewportMeta meta;
+    meta.slideId = m_handler ? m_handler->slideId() : -1;
+    meta.level = m_currentLevel;
+    meta.originX = static_cast<double>(m_regionX + sceneRect.x());
+    meta.originY = static_cast<double>(m_regionY + sceneRect.y());
+
+    const QVector<DetBox> boxes = m_infer->analyzeViewport(viewport, meta);
+    const double scale = m_view->viewScale();
+    if (scale <= 0.0) {
+        QMessageBox::warning(this, QStringLiteral("提示"), QStringLiteral("当前缩放无效"));
+        return;
+    }
+    const QRectF worldRect = m_view->viewWorldRect();
+    QVector<DetBox> worldBoxes;
+    worldBoxes.reserve(boxes.size());
+    for (const auto& box : boxes) {
+        DetBox converted = box;
+        const QPointF topLeft(worldRect.left() + box.rect.left() / scale,
+                              worldRect.top() + box.rect.top() / scale);
+        const QSizeF size(box.rect.width() / scale, box.rect.height() / scale);
+        converted.rect = QRectF(topLeft, size);
+        worldBoxes.push_back(converted);
+    }
+
+    m_result.setBoxes(worldBoxes);
+    m_view->setDetections(toSceneDetections(m_result.boxes()));
     updateStatus();
 }
 
@@ -161,11 +201,59 @@ void MainWindow::loadResults() {
         QMessageBox::warning(this, QStringLiteral("加载失败"), QStringLiteral("无法解析 JSON：%1").arg(in));
         return;
     }
-    m_view->setDetections(m_result.boxes());
+    m_view->setDetections(toSceneDetections(m_result.boxes()));
     updateStatus();
 }
 
 void MainWindow::updateStatus() {
-    statusBar()->showMessage(QStringLiteral("检测目标：%1 个").arg(m_result.count()));
+    if (!m_view || m_view->isEmpty()) {
+        statusBar()->showMessage(QStringLiteral("未打开切片"));
+        return;
+    }
+
+    const int level = m_view->currentLevel();
+    const double zoom = m_view->viewScale() * 100.0;
+    const QPointF center = m_view->viewportCenterWorld();
+    statusBar()->showMessage(QStringLiteral("Level: %1  Zoom: %2%  Center: (%.0f, %.0f)  检测目标：%3 个")
+                                 .arg(level)
+                                 .arg(zoom, 0, 'f', 1)
+                                 .arg(center.x(), 0, 'f', 0)
+                                 .arg(center.y(), 0, 'f', 0)
+                                 .arg(m_result.count()));
+    if (m_handler && m_handler->isOpen()) {
+        msg += QStringLiteral("  |  Level：%1").arg(m_view->currentLevel());
+    }
+    statusBar()->showMessage(msg);
+}
+
+void MainWindow::handleLevelChanged(int level) {
+    if (m_handler) {
+        m_handler->setCurrentLevel(level);
+    }
+    updateStatus();
+}
+
+QVector<DetBox> MainWindow::toSceneDetections(const QVector<DetBox>& level0Boxes) const {
+    if (!m_handler || !m_handler->isOpen()) return level0Boxes;
+    const double down = m_handler->levelDownsample(m_currentLevel);
+    const double invDown = (down > 0.0) ? (1.0 / down) : 1.0;
+    const double originX = static_cast<double>(m_regionX);
+    const double originY = static_cast<double>(m_regionY);
+
+    QVector<DetBox> converted;
+    converted.reserve(level0Boxes.size());
+    for (const auto& box : level0Boxes) {
+        DetBox localBox = box;
+        const double levelX = box.rect.x() * invDown;
+        const double levelY = box.rect.y() * invDown;
+        const double levelW = box.rect.width() * invDown;
+        const double levelH = box.rect.height() * invDown;
+        localBox.rect = QRectF(levelX - originX,
+                               levelY - originY,
+                               levelW,
+                               levelH);
+        converted.push_back(localBox);
+    }
+    return converted;
 }
 

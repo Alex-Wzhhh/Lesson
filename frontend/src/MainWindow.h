@@ -24,6 +24,7 @@ private slots:
     void saveResults();
     void loadResults();
     void updateStatus();
+    void handleLevelChanged(int level);
 
 private:
     Ui::MainWindow* ui{nullptr};
@@ -31,5 +32,10 @@ private:
     std::unique_ptr<InferenceClient> m_infer;
     QPointer<WSIView> m_view;
     DetectionResult m_result;
+    int m_currentLevel{0};
+    qint64 m_regionX{0};
+    qint64 m_regionY{0};
+
+    QVector<DetBox> toSceneDetections(const QVector<DetBox>& level0Boxes) const;
 };
 
