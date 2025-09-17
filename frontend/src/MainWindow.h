@@ -33,9 +33,5 @@ private:
     QPointer<WSIView> m_view;
     DetectionResult m_result;
     int m_currentLevel{0};
-    qint64 m_regionX{0};
-    qint64 m_regionY{0};
-
-    QVector<DetBox> toSceneDetections(const QVector<DetBox>& level0Boxes) const;
 };
 

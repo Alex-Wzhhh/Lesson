@@ -26,8 +26,6 @@ WSIView::WSIView(QWidget* parent) : QWidget(parent) {
     setFocusPolicy(Qt::StrongFocus);
 }
 
-#include <algorithm>
-
 void WSIView::setHandler(WSIHandler* handler) {
     m_handler = handler;
 }
@@ -76,10 +74,6 @@ QImage WSIView::grabViewportImage() const {
     QPainter painter(&img);
     const_cast<WSIView*>(this)->render(&painter);
     return img;
-}
-
-QRect WSIView::lastGrabbedSceneRect() const{
-    return m_lastGrabRect;
 }
 
 QRectF WSIView::viewWorldRect() const {

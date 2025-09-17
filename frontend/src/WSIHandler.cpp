@@ -10,6 +10,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QPainter>
+#include <QHashFunctions>
+#include <QtGlobal>
 
 #include <algorithm>
 #include <cmath>
@@ -49,7 +51,7 @@ bool WSIHandler::open(const QString& path){
     m_levelDims.clear();
     m_downsamples.clear();
 
-    const auto dimsObj = obj.value("level_dims");
+    const auto dimsObj = obj.value("level_dimensions");
     if (dimsObj.isArray()) {
         const auto dims = dimsObj.toArray();
         for (const auto& it : dims) {
@@ -82,7 +84,14 @@ bool WSIHandler::open(const QString& path){
     }
 
     resetCache();
-    return m_slideId > 0;
+    const bool ok = (m_slideId > 0) && (m_levelCount > 0) && !m_levelDims.isEmpty() && !m_downsamples.isEmpty();
+    if (!ok) {
+        m_slideId = -1;
+        m_levelCount = 0;
+        m_levelDims.clear();
+        m_downsamples.clear();
+    }
+    return ok;
 }
 
 
@@ -234,10 +243,22 @@ void WSIHandler::setCurrentLevel(int level){
     m_currentLevel = clamped;
 }
 
+double WSIHandler::levelDownsample(int level) const {
+    if (level < 0 || level >= m_downsamples.size()) {
+        return 1.0;
+    }
+    const double down = m_downsamples[level];
+    if (down > 0.0) {
+        return down;
+    }
+    return std::pow(2.0, level);
+}
+
 uint qHash(const WSIHandler::TileKey& key, uint seed) noexcept {
-    return qHash(static_cast<quint64>(key.level), seed) ^
-           qHash(static_cast<quint64>(key.x), seed << 1) ^
-           qHash(static_cast<quint64>(key.y), seed << 2);
+    seed = ::qHash(static_cast<quint64>(key.level), seed);
+    seed = ::qHash(static_cast<quint64>(key.x), seed ^ 0x9e3779b9U);
+    seed = ::qHash(static_cast<quint64>(key.y), seed ^ 0x85ebca6bU);
+    return seed;
 }
 
 

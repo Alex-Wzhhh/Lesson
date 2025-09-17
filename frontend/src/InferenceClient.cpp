@@ -5,7 +5,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 
-QVector<DetBox> InferenceClient::analyzeViewport(const QImage& img){
+QVector<DetBox> InferenceClient::analyzeViewport(const QImage& img, const ViewportMeta& meta){
     QVector<DetBox> boxes;
     if(img.isNull()) return boxes;
 
@@ -17,6 +17,13 @@ QVector<DetBox> InferenceClient::analyzeViewport(const QImage& img){
 
     QJsonObject payload;
     payload["image_b64"] = b64;
+    if (meta.slideId > 0) {
+        payload["slide_id"] = meta.slideId;
+    }
+    payload["level"] = meta.level;
+    payload["origin_x"] = meta.originX;
+    payload["origin_y"] = meta.originY;
+
     QJsonObject resp = HttpClient::postJsonSync(m_base, "/analyze_viewport", payload);
     auto arr = resp["boxes"].toArray();
     for(const auto& it : arr){

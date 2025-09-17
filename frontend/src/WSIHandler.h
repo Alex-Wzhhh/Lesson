@@ -34,6 +34,7 @@ public:
         bool operator==(const TileKey& other) const noexcept {
             return level == other.level && x == other.x && y == other.y;
         }
+        friend uint qHash(const TileKey& key, uint seed) noexcept;
     };
 
 private:
@@ -53,6 +54,4 @@ private:
     QHash<TileKey, QImage> m_tileCache;
     QList<TileKey> m_lru;
     int m_cacheCapacity{256};
-
-    uint qHash(const WSIHandler::TileKey& key, uint seed = 0) noexcept;
 };

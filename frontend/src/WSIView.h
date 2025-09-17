@@ -24,7 +24,6 @@ public:
     bool isEmpty() const;
     void setDetections(const QVector<DetBox>& boxes);
     QImage grabViewportImage() const;
-    QRect lastGrabbedSceneRect() const;
 
     int levelCount() const { return m_levelCount; }
     int currentLevel() const { return m_currentLevel; }
@@ -68,7 +67,6 @@ private:
 
     int m_levelCount{0};
     int m_currentLevel{0};
-    QRect m_lastGrabRect;
     QImage m_currentImage;
     QPointF m_currentImageWorldTopLeft{0.0, 0.0};
     int m_currentImageLevel{0};
