@@ -45,6 +45,13 @@ void WSIView::setSlideInfo(const QVector<double>& downsamples, const QVector<QSi
     m_pendingFitToWindow = m_hasSlide;
     m_pendingRequest = false;
     m_requestTimer.invalidate();
+    m_miniMapImage = QImage();
+    m_miniMapLevel = -1;
+    m_miniMapDownsample = 1.0;
+
+    if (m_hasSlide && m_handler) {
+        prepareMiniMap();
+    }
     update();
     if (m_hasSlide && width() > 0 && height() > 0) {
         fitToWindow();
@@ -103,6 +110,7 @@ void WSIView::paintEvent(QPaintEvent* event) {
     }
 
     drawDetections(painter);
+    drawMiniMap(painter);
 }
 
 void WSIView::wheelEvent(QWheelEvent* event) {
@@ -337,5 +345,103 @@ void WSIView::drawDetections(QPainter& painter) {
             painter.setPen(pen);
         }
     }
+    painter.restore();
+}
+
+void WSIView::prepareMiniMap() {
+    m_miniMapImage = QImage();
+    m_miniMapLevel = -1;
+    m_miniMapDownsample = 1.0;
+
+    if (!m_handler || !m_hasSlide || m_levelCount <= 0) return;
+
+    constexpr int kMaxDimension = 1024;
+    int level = m_levelCount - 1;
+    QSize levelSize;
+    for (; level >= 0; --level) {
+        levelSize = m_handler->levelSize(level);
+        if (levelSize.width() <= 0 || levelSize.height() <= 0) {
+            continue;
+        }
+        if (levelSize.width() <= kMaxDimension && levelSize.height() <= kMaxDimension) {
+            break;
+        }
+        if (level == 0) {
+            break;
+        }
+    }
+
+    if (levelSize.width() <= 0 || levelSize.height() <= 0) {
+        return;
+    }
+
+    QImage mini = m_handler->requestRegion(level, 0, 0, levelSize.width(), levelSize.height());
+    if (mini.isNull()) {
+        return;
+    }
+
+    m_miniMapImage = mini;
+    m_miniMapLevel = level;
+    m_miniMapDownsample = m_handler->levelDownsample(level);
+    if (m_miniMapDownsample <= 0.0) {
+        m_miniMapDownsample = std::pow(2.0, level);
+    }
+}
+
+void WSIView::drawMiniMap(QPainter& painter) {
+    if (!m_hasSlide || m_miniMapImage.isNull()) return;
+
+    const QSize imgSize = m_miniMapImage.size();
+    if (imgSize.width() <= 0 || imgSize.height() <= 0) return;
+
+    const double maxDisplayWidth = std::min<double>(220.0, width() * 0.3);
+    const double maxDisplayHeight = std::min<double>(220.0, height() * 0.3);
+    if (maxDisplayWidth <= 12.0 || maxDisplayHeight <= 12.0) return;
+
+    const double scale = std::min({maxDisplayWidth / static_cast<double>(imgSize.width()),
+                                   maxDisplayHeight / static_cast<double>(imgSize.height()),
+                                   1.0});
+    const double displayWidth = imgSize.width() * scale;
+    const double displayHeight = imgSize.height() * scale;
+    if (displayWidth <= 4.0 || displayHeight <= 4.0) return;
+
+    const double margin = 12.0;
+    const QRectF miniRect(width() - displayWidth - margin,
+                          height() - displayHeight - margin,
+                          displayWidth,
+                          displayHeight);
+
+    painter.save();
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const QRectF backdrop = miniRect.adjusted(-4.0, -4.0, 4.0, 4.0);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 140));
+    painter.drawRoundedRect(backdrop, 6.0, 6.0);
+
+    painter.setBrush(Qt::NoBrush);
+    painter.drawImage(miniRect, m_miniMapImage);
+    painter.setPen(QPen(QColor(255, 255, 255, 220), 1.0));
+    painter.drawRect(miniRect);
+
+    const QRectF worldRect = currentWorldRect();
+    if (!worldRect.isEmpty() && m_miniMapDownsample > 0.0) {
+        const double scaleX = miniRect.width() / static_cast<double>(imgSize.width());
+        const double scaleY = miniRect.height() / static_cast<double>(imgSize.height());
+
+        QRectF viewRect(miniRect.left() + (worldRect.left() / m_miniMapDownsample) * scaleX,
+                        miniRect.top() + (worldRect.top() / m_miniMapDownsample) * scaleY,
+                        (worldRect.width() / m_miniMapDownsample) * scaleX,
+                        (worldRect.height() / m_miniMapDownsample) * scaleY);
+        viewRect = viewRect.intersected(miniRect);
+        if (!viewRect.isEmpty()) {
+            QPen viewPen(QColor(0, 200, 255));
+            viewPen.setWidthF(2.0);
+            painter.setPen(viewPen);
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRect(viewRect);
+        }
+    }
+
     painter.restore();
 }

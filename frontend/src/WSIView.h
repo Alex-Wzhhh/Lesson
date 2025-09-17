@@ -53,6 +53,9 @@ private:
     void fetchRegion();
     QRectF worldToScreen(const QRectF& rect) const;
     void drawDetections(QPainter& painter);
+    void drawMiniMap(QPainter& painter);
+    void prepareMiniMap();
+
 
     WSIHandler* m_handler{nullptr};
     bool m_hasSlide{false};
@@ -80,4 +83,8 @@ private:
     QElapsedTimer m_requestTimer;
     int m_requestIntervalMs{80};
     bool m_pendingRequest{false};
+
+    QImage m_miniMapImage;
+    double m_miniMapDownsample{1.0};
+    int m_miniMapLevel{-1};
 };

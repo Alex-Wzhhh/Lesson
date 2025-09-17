@@ -61,8 +61,8 @@ MainWindow::MainWindow(QWidget* parent)
         ui->resultTextEdit->setReadOnly(true);
     }
     if (ui->mainSplitter) {
-        ui->mainSplitter->setStretchFactor(0, 1);
-        ui->mainSplitter->setStretchFactor(1, 3);
+        ui->mainSplitter->setStretchFactor(0, 3);
+        ui->mainSplitter->setStretchFactor(1, 7);
         ui->mainSplitter->setCollapsible(0, false);
         ui->mainSplitter->setCollapsible(1, false);
     }

@@ -17,17 +17,6 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Gui Network)
 
-# 可选 OpenSlide
-find_path(OPENSLIDE_INCLUDE_DIR openslide/openslide.h)
-find_library(OPENSLIDE_LIBRARY NAMES openslide)
-if(OPENSLIDE_INCLUDE_DIR AND OPENSLIDE_LIBRARY)
-    message(STATUS "Found OpenSlide: ${OPENSLIDE_LIBRARY}")
-    add_compile_definitions(USE_OPENSLIDE)
-else()
-    message(WARNING "OpenSlide not found. 将以普通大图像模式运行（DUMMY_WSI）。")
-    add_compile_definitions(DUMMY_WSI)
-endif()
-
 # 一定要把 .h 也放进 target 源列表中，AUTOMOC 才会处理
 qt_add_executable(${PROJECT_NAME}
     src/main.cpp
