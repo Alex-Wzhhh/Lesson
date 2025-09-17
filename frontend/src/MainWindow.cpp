@@ -18,6 +18,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QRadialGradient>
+#include <QDockWidget>
 #include <cmath>
 #include <algorithm>
 
@@ -25,6 +26,7 @@
 #include "WSIView.h"
 #include "InferenceClient.h"
 #include "DetectionResult.h"
+#include "MiniMapWidget.h"
 
 // 从 config/settings.json 读取后端 URL（找不到则用默认）
 static QUrl loadBackendUrl() {
@@ -82,6 +84,17 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
+    // 迷你图停靠窗口
+    m_miniMap = new MiniMapWidget(this);
+    m_miniMapDock = new QDockWidget(QStringLiteral("迷你图"), this);
+    m_miniMapDock->setObjectName(QStringLiteral("MiniMapDock"));
+    m_miniMapDock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::BottomDockWidgetArea);
+    m_miniMapDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    m_miniMapDock->setWidget(m_miniMap);
+    m_miniMapDock->setMinimumWidth(220);
+    m_miniMapDock->setMinimumHeight(220);
+    addDockWidget(Qt::RightDockWidgetArea, m_miniMapDock);
+
     // 业务对象
     m_handler = std::make_unique<WSIHandler>(backendBase);
     m_infer   = std::make_unique<InferenceClient>(backendBase);
@@ -128,6 +141,14 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_view, &WSIView::levelChanged, this, &MainWindow::handleLevelChanged);
     connect(m_view, &WSIView::levelChanged, this, &MainWindow::updateStatus);
 
+    connect(m_view, &WSIView::miniMapReady, m_miniMap, &MiniMapWidget::setMiniMapImage);
+    connect(m_view, &WSIView::viewportChanged, this, [this]() {
+        if (m_miniMap && m_view) {
+            m_miniMap->setViewWorldRect(m_view->viewWorldRect());
+        }
+    });
+    connect(m_miniMap, &MiniMapWidget::requestCenterOn, m_view, &WSIView::centerOnWorld);
+
 
     statusBar()->showMessage(QStringLiteral("准备就绪（后端：%1）").arg(backendBase.toString()));
 
@@ -165,6 +186,9 @@ void MainWindow::openWSI() {
         m_handler->setCurrentLevel(m_currentLevel);
     }
     updateStatus();
+    if (m_miniMap && m_view) {
+        m_miniMap->setViewWorldRect(m_view->viewWorldRect());
+    }
 }
 
 void MainWindow::runInferenceOnViewport() {

@@ -1,3 +1,4 @@
+
 #include "WSIView.h"
 #include "WSIHandler.h"
 
@@ -10,10 +11,15 @@
 #include <QPen>
 #include <QBrush>
 #include <QFontMetricsF>
+#include <QTransform>
+#include <QHashFunctions>
+#include <QtConcurrent>
+#include <QThread>
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace {
 constexpr double kEpsilon = 1e-6;
@@ -24,6 +30,20 @@ WSIView::WSIView(QWidget* parent) : QWidget(parent) {
     setAutoFillBackground(false);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
+
+    const int idealThreads = QThread::idealThreadCount();
+    if (idealThreads > 0) {
+        m_tileThreadPool.setMaxThreadCount(std::max(2, idealThreads));
+    } else {
+        m_tileThreadPool.setMaxThreadCount(4);
+    }
+    m_tileThreadPool.setExpiryTimeout(3000);
+}
+
+WSIView::~WSIView() {
+    ++m_generation;
+    cancelPendingFetches();
+    m_tileThreadPool.waitForDone();
 }
 
 void WSIView::setHandler(WSIHandler* handler) {
@@ -31,6 +51,9 @@ void WSIView::setHandler(WSIHandler* handler) {
 }
 
 void WSIView::setSlideInfo(const QVector<double>& downsamples, const QVector<QSize>& levelSizes) {
+    ++m_generation;
+    cancelPendingFetches();
+
     m_downsamples = downsamples;
     m_levelSizes = levelSizes;
     m_levelCount = std::min(m_downsamples.size(), m_levelSizes.size());
@@ -38,27 +61,29 @@ void WSIView::setSlideInfo(const QVector<double>& downsamples, const QVector<QSi
     m_worldTopLeft = QPointF(0.0, 0.0);
     m_viewScale = 1.0;
     m_currentLevel = 0;
-    m_currentImage = QImage();
-    m_currentImageLevel = 0;
-    m_currentImageWorldTopLeft = QPointF(0.0, 0.0);
     m_hasSlide = m_levelCount > 0;
     m_pendingFitToWindow = m_hasSlide;
     m_pendingRequest = false;
     m_requestTimer.invalidate();
+
+    m_tileCache.clear();
+    m_tileLru.clear();
     m_miniMapImage = QImage();
     m_miniMapLevel = -1;
     m_miniMapDownsample = 1.0;
 
+    emit miniMapReady(QImage(), 1.0, QSize());
+
     if (m_hasSlide && m_handler) {
         prepareMiniMap();
     }
+
     update();
     if (m_hasSlide && width() > 0 && height() > 0) {
         fitToWindow();
         m_pendingFitToWindow = false;
     }
 }
-
 
 void WSIView::resetView() {
     if (!m_hasSlide) return;
@@ -87,10 +112,22 @@ QRectF WSIView::viewWorldRect() const {
     return currentWorldRect();
 }
 
-
 QPointF WSIView::viewportCenterWorld() const {
     const QRectF rect = currentWorldRect();
     return rect.center();
+}
+
+void WSIView::centerOnWorld(const QPointF& worldCenter) {
+    if (!m_hasSlide || m_viewScale <= 0.0) return;
+    if (width() <= 0 || height() <= 0) return;
+
+    const double viewWidth = static_cast<double>(width()) / m_viewScale;
+    const double viewHeight = static_cast<double>(height()) / m_viewScale;
+    QPointF topLeft(worldCenter.x() - viewWidth * 0.5,
+                    worldCenter.y() - viewHeight * 0.5);
+    m_worldTopLeft = topLeft;
+    clampWorldTopLeft();
+    scheduleRepaint(true);
 }
 
 void WSIView::paintEvent(QPaintEvent* event) {
@@ -99,18 +136,67 @@ void WSIView::paintEvent(QPaintEvent* event) {
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.fillRect(rect(), QColor(40, 40, 40));
 
-    if (!m_currentImage.isNull()) {
-        const double downsample = (m_currentImageLevel >= 0 && m_currentImageLevel < m_downsamples.size() && m_downsamples[m_currentImageLevel] > 0.0)
-        ? m_downsamples[m_currentImageLevel]
-        : 1.0;
-        const QPointF topLeft = (m_currentImageWorldTopLeft - m_worldTopLeft) * m_viewScale;
-        const QSizeF size(m_currentImage.width() * downsample * m_viewScale,
-                          m_currentImage.height() * downsample * m_viewScale);
-        painter.drawImage(QRectF(topLeft, size), m_currentImage);
+    if (!m_hasSlide) {
+        drawDetections(painter);
+        return;
     }
 
+    drawLowResPreview(painter);
+
+    const QRectF viewportRect(QPointF(0, 0), QSizeF(width(), height()));
+    painter.save();
+    painter.setClipRect(viewportRect);
+
+    const QRectF worldRect = currentWorldRect();
+    if (!worldRect.isEmpty() && m_currentLevel >= 0 && m_currentLevel < m_levelCount) {
+        const QSize levelSize = m_levelSizes.value(m_currentLevel);
+        const double downsample = (m_currentLevel >= 0 && m_currentLevel < m_downsamples.size() && m_downsamples[m_currentLevel] > 0.0)
+                                      ? m_downsamples[m_currentLevel]
+                                      : std::pow(2.0, m_currentLevel);
+        if (levelSize.width() > 0 && levelSize.height() > 0 && downsample > 0.0) {
+            const double levelLeft = worldRect.left() / downsample;
+            const double levelTop = worldRect.top() / downsample;
+            const double levelRight = (worldRect.left() + worldRect.width()) / downsample;
+            const double levelBottom = (worldRect.top() + worldRect.height()) / downsample;
+
+            qint64 tileXStart = static_cast<qint64>(std::floor(levelLeft / static_cast<double>(m_tileSize))) * m_tileSize;
+            qint64 tileYStart = static_cast<qint64>(std::floor(levelTop / static_cast<double>(m_tileSize))) * m_tileSize;
+            qint64 tileXEnd = static_cast<qint64>(std::ceil(levelRight / static_cast<double>(m_tileSize))) * m_tileSize;
+            qint64 tileYEnd = static_cast<qint64>(std::ceil(levelBottom / static_cast<double>(m_tileSize))) * m_tileSize;
+
+            tileXStart = std::max<qint64>(0, tileXStart);
+            tileYStart = std::max<qint64>(0, tileYStart);
+            tileXEnd = std::min<qint64>(levelSize.width(), tileXEnd);
+            tileYEnd = std::min<qint64>(levelSize.height(), tileYEnd);
+
+            for (qint64 ty = tileYStart; ty < tileYEnd; ty += m_tileSize) {
+                const int tileH = static_cast<int>(std::min<qint64>(m_tileSize, levelSize.height() - ty));
+                if (tileH <= 0) continue;
+                for (qint64 tx = tileXStart; tx < tileXEnd; tx += m_tileSize) {
+                    const int tileW = static_cast<int>(std::min<qint64>(m_tileSize, levelSize.width() - tx));
+                    if (tileW <= 0) continue;
+                    const TileKey key{m_currentLevel, tx, ty};
+                    auto it = m_tileCache.constFind(key);
+                    if (it != m_tileCache.constEnd() && !it.value().isNull()) {
+                        const QImage& tile = it.value();
+                        touchTile(key);
+                        QRectF tileWorldRect(QPointF(tx * downsample, ty * downsample),
+                                             QSizeF(tile.width() * downsample, tile.height() * downsample));
+                        const QRectF destRect = worldToScreen(tileWorldRect);
+                        painter.drawImage(destRect, tile);
+                    } else {
+                        QRectF tileWorldRect(QPointF(tx * downsample, ty * downsample),
+                                             QSizeF(tileW * downsample, tileH * downsample));
+                        const QRectF destRect = worldToScreen(tileWorldRect);
+                        painter.fillRect(destRect, QColor(60, 60, 60, 90));
+                    }
+                }
+            }
+        }
+    }
+
+    painter.restore();
     drawDetections(painter);
-    drawMiniMap(painter);
 }
 
 void WSIView::wheelEvent(QWheelEvent* event) {
@@ -181,6 +267,7 @@ void WSIView::mouseReleaseEvent(QMouseEvent* event) {
      if (m_isPanning && (event->button() == Qt::LeftButton || event->button() == Qt::RightButton || event->button() == Qt::MiddleButton)) {
         m_isPanning = false;
         setCursor(Qt::ArrowCursor);
+        scheduleRepaint(true);
         event->accept();
         return;
     }
@@ -198,7 +285,23 @@ void WSIView::resizeEvent(QResizeEvent* event) {
     }
 
     clampWorldTopLeft();
-    scheduleRepaint();
+    scheduleRepaint(true);
+}
+
+void WSIView::touchTile(const TileKey& key) {
+    const int idx = m_tileLru.indexOf(key);
+    if (idx >= 0) {
+        m_tileLru.removeAt(idx);
+    }
+    m_tileLru.prepend(key);
+    pruneCache();
+}
+
+void WSIView::pruneCache() {
+    while (m_tileLru.size() > m_tileCacheCapacity) {
+        const TileKey last = m_tileLru.takeLast();
+        m_tileCache.remove(last);
+    }
 }
 
 void WSIView::fitToWindow() {
@@ -263,22 +366,22 @@ int WSIView::chooseLevel(double viewScale) const {
 }
 
 void WSIView::scheduleRepaint(bool force) {
-    if (!m_hasSlide || !m_handler) {
+    if (!m_hasSlide) {
         update();
         emit viewportChanged();
         return;
     }
 
-    bool fetched = false;
     if (force || !m_requestTimer.isValid() || m_requestTimer.elapsed() >= m_requestIntervalMs) {
         m_pendingRequest = false;
-        fetchRegion();
+        if (m_handler) {
+            updateVisibleTiles(true);
+        }
         if (m_requestTimer.isValid()) {
             m_requestTimer.restart();
         } else {
             m_requestTimer.start();
         }
-        fetched = true;
     } else if (!m_pendingRequest) {
         m_pendingRequest = true;
         const int delay = m_requestIntervalMs - static_cast<int>(m_requestTimer.elapsed());
@@ -292,23 +395,99 @@ void WSIView::scheduleRepaint(bool force) {
     emit viewportChanged();
 }
 
-void WSIView::fetchRegion() {
-    if (!m_handler || !m_hasSlide || width() <= 0 || height() <= 0) return;
-
-    const QRectF worldRect = currentWorldRect();
-    const qint64 x0 = static_cast<qint64>(std::floor(worldRect.left()));
-    const qint64 y0 = static_cast<qint64>(std::floor(worldRect.top()));
-    QImage img = m_handler->readRegionAtCurrentScale(x0, y0, width(), height(), m_currentLevel, m_viewScale);
-    if (!img.isNull()) {
-        m_currentImage = img;
-        const double downsample = (m_currentLevel >= 0 && m_currentLevel < m_downsamples.size() && m_downsamples[m_currentLevel] > 0.0)
-                                      ? m_downsamples[m_currentLevel]
-                                      : 1.0;
-        const qint64 px = std::max<qint64>(0, static_cast<qint64>(std::floor(static_cast<double>(x0) / downsample)));
-        const qint64 py = std::max<qint64>(0, static_cast<qint64>(std::floor(static_cast<double>(y0) / downsample)));
-        m_currentImageWorldTopLeft = QPointF(px * downsample, py * downsample);
-        m_currentImageLevel = m_currentLevel;
+void WSIView::updateVisibleTiles(bool forceRequest) {
+    if (!forceRequest) {
+        return;
     }
+    if (!m_handler || !m_hasSlide || width() <= 0 || height() <= 0) return;
+    if (m_currentLevel < 0 || m_currentLevel >= m_levelCount) return;
+
+    QRectF worldRect = currentWorldRect();
+    if (worldRect.isEmpty()) return;
+
+    const double marginX = worldRect.width() * 0.2;
+    const double marginY = worldRect.height() * 0.2;
+    worldRect.adjust(-marginX, -marginY, marginX, marginY);
+    const QRectF slideRect(QPointF(0.0, 0.0), QSizeF(m_canvasSize));
+    worldRect = worldRect.intersected(slideRect);
+    if (worldRect.isEmpty()) return;
+
+    const double downsample = (m_currentLevel >= 0 && m_currentLevel < m_downsamples.size() && m_downsamples[m_currentLevel] > 0.0)
+                                  ? m_downsamples[m_currentLevel]
+                                  : std::pow(2.0, m_currentLevel);
+    if (downsample <= 0.0) return;
+
+    const QSize levelSize = m_levelSizes.value(m_currentLevel);
+    if (levelSize.width() <= 0 || levelSize.height() <= 0) return;
+
+    const double levelLeft = worldRect.left() / downsample;
+    const double levelTop = worldRect.top() / downsample;
+    const double levelRight = (worldRect.left() + worldRect.width()) / downsample;
+    const double levelBottom = (worldRect.top() + worldRect.height()) / downsample;
+
+    qint64 tileXStart = static_cast<qint64>(std::floor(levelLeft / static_cast<double>(m_tileSize))) * m_tileSize;
+    qint64 tileYStart = static_cast<qint64>(std::floor(levelTop / static_cast<double>(m_tileSize))) * m_tileSize;
+    qint64 tileXEnd = static_cast<qint64>(std::ceil(levelRight / static_cast<double>(m_tileSize))) * m_tileSize;
+    qint64 tileYEnd = static_cast<qint64>(std::ceil(levelBottom / static_cast<double>(m_tileSize))) * m_tileSize;
+
+    tileXStart = std::max<qint64>(0, tileXStart);
+    tileYStart = std::max<qint64>(0, tileYStart);
+    tileXEnd = std::min<qint64>(levelSize.width(), tileXEnd);
+    tileYEnd = std::min<qint64>(levelSize.height(), tileYEnd);
+
+    for (qint64 ty = tileYStart; ty < tileYEnd; ty += m_tileSize) {
+        const int tileH = static_cast<int>(std::min<qint64>(m_tileSize, levelSize.height() - ty));
+        if (tileH <= 0) continue;
+        for (qint64 tx = tileXStart; tx < tileXEnd; tx += m_tileSize) {
+            const int tileW = static_cast<int>(std::min<qint64>(m_tileSize, levelSize.width() - tx));
+            if (tileW <= 0) continue;
+            const TileKey key{m_currentLevel, tx, ty};
+            if (m_tileCache.contains(key)) {
+                continue;
+            }
+            if (m_pendingFetches.contains(key)) {
+                continue;
+            }
+            requestTile(key, tileW, tileH);
+        }
+    }
+}
+
+void WSIView::requestTile(const TileKey& key, int tileW, int tileH) {
+    if (!m_handler || tileW <= 0 || tileH <= 0) return;
+    if (m_pendingFetches.contains(key)) return;
+
+    auto* watcher = new QFutureWatcher<QImage>(this);
+    const quint64 generation = m_generation;
+    auto future = QtConcurrent::run(&m_tileThreadPool, [handler = m_handler, key, tileW, tileH]() -> QImage {
+        if (!handler) return QImage();
+        return handler->requestRegion(key.level, key.x, key.y, tileW, tileH);
+    });
+    m_pendingFetches.insert(key, watcher);
+    QObject::connect(watcher, &QFutureWatcher<QImage>::finished, this, [this, watcher, key, generation]() {
+        QImage tile = watcher->future().result();
+        m_pendingFetches.remove(key);
+        watcher->deleteLater();
+        if (generation != m_generation) {
+            return;
+        }
+        if (!tile.isNull()) {
+            m_tileCache.insert(key, tile);
+            touchTile(key);
+            update();
+        }
+    });
+    watcher->setFuture(future);
+}
+
+void WSIView::cancelPendingFetches() {
+    for (auto watcher : std::as_const(m_pendingFetches)) {
+        if (!watcher) continue;
+        watcher->cancel();
+        watcher->waitForFinished();
+        watcher->deleteLater();
+    }
+    m_pendingFetches.clear();
 }
 
 QRectF WSIView::worldToScreen(const QRectF& rect) const {
@@ -348,12 +527,34 @@ void WSIView::drawDetections(QPainter& painter) {
     painter.restore();
 }
 
+void WSIView::drawLowResPreview(QPainter& painter) {
+    if (m_miniMapImage.isNull() || m_miniMapDownsample <= 0.0) return;
+
+    painter.save();
+    painter.setClipRect(QRectF(QPointF(0, 0), QSizeF(width(), height())));
+
+    QTransform transform;
+    transform.translate(-m_worldTopLeft.x(), -m_worldTopLeft.y());
+    transform.scale(m_viewScale, m_viewScale);
+    painter.setWorldTransform(transform);
+
+    const QRectF worldRect(QPointF(0.0, 0.0),
+                           QSizeF(m_miniMapImage.width() * m_miniMapDownsample,
+                                  m_miniMapImage.height() * m_miniMapDownsample));
+    painter.drawImage(worldRect, m_miniMapImage);
+
+    painter.restore();
+}
+
 void WSIView::prepareMiniMap() {
     m_miniMapImage = QImage();
     m_miniMapLevel = -1;
     m_miniMapDownsample = 1.0;
 
-    if (!m_handler || !m_hasSlide || m_levelCount <= 0) return;
+    if (!m_handler || !m_hasSlide || m_levelCount <= 0) {
+        emit miniMapReady(m_miniMapImage, m_miniMapDownsample, m_canvasSize);
+        return;
+    }
 
     constexpr int kMaxDimension = 1024;
     int level = m_levelCount - 1;
@@ -372,11 +573,13 @@ void WSIView::prepareMiniMap() {
     }
 
     if (levelSize.width() <= 0 || levelSize.height() <= 0) {
+        emit miniMapReady(m_miniMapImage, m_miniMapDownsample, m_canvasSize);
         return;
     }
 
     QImage mini = m_handler->requestRegion(level, 0, 0, levelSize.width(), levelSize.height());
     if (mini.isNull()) {
+        emit miniMapReady(m_miniMapImage, m_miniMapDownsample, m_canvasSize);
         return;
     }
 
@@ -386,62 +589,11 @@ void WSIView::prepareMiniMap() {
     if (m_miniMapDownsample <= 0.0) {
         m_miniMapDownsample = std::pow(2.0, level);
     }
+    emit miniMapReady(m_miniMapImage, m_miniMapDownsample, m_canvasSize);
 }
-
-void WSIView::drawMiniMap(QPainter& painter) {
-    if (!m_hasSlide || m_miniMapImage.isNull()) return;
-
-    const QSize imgSize = m_miniMapImage.size();
-    if (imgSize.width() <= 0 || imgSize.height() <= 0) return;
-
-    const double maxDisplayWidth = std::min<double>(220.0, width() * 0.3);
-    const double maxDisplayHeight = std::min<double>(220.0, height() * 0.3);
-    if (maxDisplayWidth <= 12.0 || maxDisplayHeight <= 12.0) return;
-
-    const double scale = std::min({maxDisplayWidth / static_cast<double>(imgSize.width()),
-                                   maxDisplayHeight / static_cast<double>(imgSize.height()),
-                                   1.0});
-    const double displayWidth = imgSize.width() * scale;
-    const double displayHeight = imgSize.height() * scale;
-    if (displayWidth <= 4.0 || displayHeight <= 4.0) return;
-
-    const double margin = 12.0;
-    const QRectF miniRect(width() - displayWidth - margin,
-                          height() - displayHeight - margin,
-                          displayWidth,
-                          displayHeight);
-
-    painter.save();
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-
-    const QRectF backdrop = miniRect.adjusted(-4.0, -4.0, 4.0, 4.0);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(0, 0, 0, 140));
-    painter.drawRoundedRect(backdrop, 6.0, 6.0);
-
-    painter.setBrush(Qt::NoBrush);
-    painter.drawImage(miniRect, m_miniMapImage);
-    painter.setPen(QPen(QColor(255, 255, 255, 220), 1.0));
-    painter.drawRect(miniRect);
-
-    const QRectF worldRect = currentWorldRect();
-    if (!worldRect.isEmpty() && m_miniMapDownsample > 0.0) {
-        const double scaleX = miniRect.width() / static_cast<double>(imgSize.width());
-        const double scaleY = miniRect.height() / static_cast<double>(imgSize.height());
-
-        QRectF viewRect(miniRect.left() + (worldRect.left() / m_miniMapDownsample) * scaleX,
-                        miniRect.top() + (worldRect.top() / m_miniMapDownsample) * scaleY,
-                        (worldRect.width() / m_miniMapDownsample) * scaleX,
-                        (worldRect.height() / m_miniMapDownsample) * scaleY);
-        viewRect = viewRect.intersected(miniRect);
-        if (!viewRect.isEmpty()) {
-            QPen viewPen(QColor(0, 200, 255));
-            viewPen.setWidthF(2.0);
-            painter.setPen(viewPen);
-            painter.setBrush(Qt::NoBrush);
-            painter.drawRect(viewRect);
-        }
-    }
-
-    painter.restore();
+uint qHash(const WSIView::TileKey& key, uint seed) noexcept {
+    seed = ::qHash(static_cast<quint64>(key.level), seed);
+    seed = ::qHash(static_cast<quint64>(key.x), seed ^ 0x9e3779b9U);
+    seed = ::qHash(static_cast<quint64>(key.y), seed ^ 0x85ebca6bU);
+    return seed;
 }

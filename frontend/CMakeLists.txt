@@ -15,7 +15,7 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS
     "${CMAKE_CURRENT_SOURCE_DIR}/ui"    # 可留作兼容
 )
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Gui Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Gui Network Concurrent)
 
 # 一定要把 .h 也放进 target 源列表中，AUTOMOC 才会处理
 qt_add_executable(${PROJECT_NAME}
@@ -32,6 +32,8 @@ qt_add_executable(${PROJECT_NAME}
     src/HttpClient.h
     src/InferenceClient.cpp
     src/InferenceClient.h
+    src/MiniMapWidget.cpp
+    src/MiniMapWidget.h
     src/wsiviewer.h
 
     mainwindow.ui
@@ -42,7 +44,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}  # ui_*.h / moc_*.cpp 生成在 build 目录
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::Gui Qt6::Network)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::Gui Qt6::Network Qt6::Concurrent)
 
 if(OPENSLIDE_LIBRARY)
   target_include_directories(${PROJECT_NAME} PRIVATE ${OPENSLIDE_INCLUDE_DIR})
